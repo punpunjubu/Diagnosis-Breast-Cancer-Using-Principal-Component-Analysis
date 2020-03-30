@@ -1,0 +1,231 @@
+---
+title: ""
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(plotly)
+```
+Importing dataset
+```{r}
+df <- read.csv('BCC.csv')
+head(df)
+
+```
+Exploring data structure
+```{r}
+str(df)
+```
+
+Deleted id
+```{r}
+df <- select(df, -id)
+```
+
+Calculate Principal Component and delete outcome 'diagnosis'
+
+```{r}
+pr.out = prcomp(select(df,-diagnosis) , scale = TRUE)
+pr.out
+```
+
+Explore structure
+```{r}
+str(pr.out)
+```
+
+Summary Principle components
+```{r}
+summary(pr.out)
+
+```
+```{r}
+#not include standard deviations 
+pr.out$rotation
+```
+```{r}
+#As showed the equation, sum of squared loadings = 1
+#Should be 1 
+apply (pr.out$rotation, 2, function(x)
+  sum(x ^ 2))
+
+```
+```{r}
+#Should use ggplot
+plot(pr.out)
+```
+```{r}
+#Better to use ggplot
+# %>% t translate to matrix
+# %>%  as.data.frame() translate to dataframe
+pc_dat <- summary(pr.out)$importance %>% t %>%  as.data.frame()
+class(pc_dat)
+
+pc_dat
+```
+Creating new row
+```{r}
+pc_dat$PCs <- rownames(pc_dat)
+pc_dat
+```
+```{r}
+#convert to chr to factor
+pc_dat$PCs <- factor(pc_dat$PC, levels = c("PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10", "PC11","PC12","PC13","PC14","PC15","PC16","PC17","PC18","PC19","PC20"))
+pc_dat
+```
+
+Graph relationship between Variance Explained vs Principle of Component
+```{r warning=FALSE}
+# `Standard deviation`^2 = variance
+# + geom_point = highest points
+pl <- ggplot(data = pc_dat, aes(x=PCs, y=`Standard deviation`^2))+
+  geom_bar(stat="identity", aes(fill=PCs))+
+  geom_point()+
+  geom_line(aes(group = 1), color="blue")+
+  ylab("Variance Explained")+
+  xlab("Principal Components")+
+  theme_bw()
+ggplotly(pl)
+```
+
+Graph relationship between Proportion of Variance Explained vs Principle of Component
+
+```{r warning=FALSE}
+pl <- ggplot(data = pc_dat, aes(x=PCs, y=`Proportion of Variance`))+
+  geom_bar(stat="identity", aes(fill=PCs))+
+  geom_point()+
+  geom_line(aes(group = 1), color="blue")+
+  ylab("Proportion of Variance Explained")+
+  xlab("Principal Components")+
+  theme_bw()
+ggplotly(pl)
+
+```
+```{r}
+#PC1 explain 85% of variance of data
+#Let see loading for each variable 
+#sort min -> max
+pr.out$rotation[,1] %>% sort
+
+```
+
+Cumulative Proportion of variance accounted by each component 
+
+```{r warning=FALSE}
+pl <- ggplot(data = pc_dat, aes(x=PCs, y=`Cumulative Proportion`))+
+  geom_bar(stat="identity", aes(fill=PCs))+
+  geom_point()+
+  geom_smooth(aes(group = 1), formula = y~poly(x,3), color="blue", method="lm", se = F)+
+  ylab("Cumulative Proportion of Variance Explained")+
+  xlab("Principal Components")+
+  theme_bw()
+ggplotly(pl)
+```
+```{r}
+#The scale=0 argument to biplot() ensures that the arrows are scaled to represent the loadings; other values for scale give slightly different biplots with different interpretations
+biplot (pr.out , scale = 0, cex = .6) 
+```
+```{r}
+library(pca3d)
+```
+
+2D graph with PC1 AND PC2 no show.ellipses
+```{r}
+pca2d(pr.out, group = df$diagnosis, biplot = T, show.labels = F, legend="topleft", radius=2 )
+```
+
+2D graph with PC1 AND PC2  show.ellipses
+```{r}
+#show grouping ellipses
+pca2d(pr.out, group = df$diagnosis, biplot = T, biplot.vars=3, show.labels = F, legend="topleft", show.ellipses = T, show.group.labels = T, radius=2)
+```
+
+3d graph with PC1 PC2 AND PC3
+```{r}
+pca3d(pr.out, group = df$diagnosis, biplot = T, biplot.vars=3, show.labels = F, legend="topleft", show.ellipses = T, show.group.labels = T, radius=2)
+```
+Hierarchical clustering
+```{r}
+df.h <- select(df,-diagnosis)
+rownames(df.h) <- paste(1:nrow(df.h), df$diagnosis, sep="_") #for checking with cluster result
+```
+```{r}
+hc <- hclust(dist(df.h, method = "manhattan"), method = "ward.D2")
+#dist() method = "euclidean", "maximum", "manhattan", "canberra", "binary" or "minkowski"
+#hclust() method = "ward.D", "ward.D2", "single", "complete", "average" (= UPGMA), "mcquitty" (= WPGMA), "median" (= WPGMC) or "centroid" (= UPGMC).
+```
+```{r}
+plot(hc) 
+```
+```{r}
+library(dendextend)
+```
+```{r}
+dend <- df.h %>%  scale %>%  dist(method = "euclidean") %>% hclust(method = "complete") %>% as.dendrogram
+dend %>% plot
+```
+
+```{r}
+dend %>%set("labels_cex", 1) %>% set("labels_col", value = c("red", "blue"), k=2) %>% set("branches_k_color", k = 2) %>%  plot %>% abline(h = 12, lty = 2)
+```
+```{r}
+#we can keep series of adjustments in variable
+dend <- dend %>% set("labels_cex", 0.5) %>% set("labels_col", value = c("red", "blue"), k=2) %>% set("branches_k_color", k = 2) 
+
+dend %>%  plot 
+dend %>%  abline(h = 12, lty = 2)
+dend %>%  rect.dendrogram(k=2, border = 8, lty = 5, lwd = 2)
+```
+```{r}
+dend2 <- df.h %>%  scale %>%  dist(method = "euclidean") %>% hclust(method = "average") %>% as.dendrogram
+dend2 %>% plot
+
+```
+```{r}
+dend2 %>%set("labels_cex", 1) %>% set("labels_col", value = c("red", "blue"), k=2) %>% set("branches_k_color", k = 2) %>%  plot %>% abline(h = 12, lty = 2)
+```
+```{r echo=FALSE}
+# library(ggplot2)
+# 
+# ggd <- as.ggdend(dend)
+# 
+# ggplot(ggd)+theme_bw() 
+# ```
+# ```{r}
+# ggplot(ggd, horiz = T)+theme_bw()
+# ```
+# ```{r}
+# #circle
+# ggplot(ggd, labels = F)+scale_y_reverse(expand = c(0.2, 0))+coord_polar(theta="x")
+```
+
+K-means clustering
+
+
+We will demonstrate with Breast cancer data 
+```{r}
+#If using all 4 predictor variables
+cl <- kmeans(df.h, centers=3) #centers equivalent to k
+cl
+
+```
+```{r}
+table(cl$cluster, df$diagnosis)
+
+
+```
+<p style="color: red">Answer: I have more variables than sample points. The clustering itself has no problems with the p>n situation, however the visualization internally uses princomp (which is incapable of handling p>n) to plot the similarity space projection.</p>
+```{r}
+#Error more variables than sample points and the principal component analysis that is being done is failing.
+# library(cluster)
+# clusplot(df.h, cl$cluster, color=T, shade=T, labels=0,lines=0)
+
+```
+
+
+
+
